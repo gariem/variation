@@ -1,0 +1,13 @@
+work
+*.fasta
+*.fa
+*.log.*
+.nextflow.log
+.nextflow/
+results/
+*.gz
+*.fai
+input/validation
+input/bubble_bed
+*.gff3
+*.out
