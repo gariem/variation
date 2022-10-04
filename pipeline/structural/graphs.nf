@@ -2,10 +2,10 @@
 
 nextflow.enable.dsl = 2
 
-params.reference = "./input/Mus_musculus.GRCm39.dna.toplevel.chr1.fa"
-params.reads = "./input/reads/long/*/*.gz"
+params.reference = "./input/Mus_musculus.GRCm39.dna.toplevel.fa"
 params.results = "./results"
 params.bubble_beds = "./input/bubble_bed/*.bed"
+params.chromosomes_dir = "./input/chromosomes"
 
 process build_pangenome {
 
@@ -47,7 +47,7 @@ process get_bubbles {
 
 process candidate_indels {
 
-    publishDir file(params.results + '/support-files/graphs/'), mode: "copy"
+    publishDir file(params.results + '/support-files/graphs/candidate-regions'), mode: "copy"
 
     input:
         tuple val(strain), file(bubbles_bed)
@@ -74,16 +74,77 @@ process candidate_indels {
                 ref_x=$2-b; ref_y=$3+b; 
                 str_x=$12-a; str_y=$13+a;
             }; 
-            if($3-$2!=$7 && $1 ~ /^[0-9]*$/) 
+            if($6!="." && $3-$2!=$7 && $1 ~ /^[0-9]*$/ && $1==19) 
                 print $1,$2,$3,$3-$2,"|",$11,$12,$13,$7,"|",lo,hi,a,b,"|",ref_x,ref_y,ref_y-ref_x,"|",str_x,str_y,str_y-str_x,"|",($13-$12)-($3-$2)":"$7-($3-$2)":"$6
-        }' > candidates.tsv    
+        }' > candidates-!{strain}.tsv    
     '''   
 }
 
+process reference_regions {
+
+    publishDir file(params.results + '/support-files/graphs/regions'), mode: "copy"
+
+    input:
+        tuple val(strain), file(candidates)
+        file reference
+
+    output:
+        tuple val(strain), file("*.fa")
+
+    shell:
+    '''
+    cut -f1,16,17,18 !{candidates} > candidates.bed
+    bedtools getfasta -fi !{reference} -bed candidates.bed -fo !{strain}.ref.segments.fa
+    '''
+
+}
+
+process strain_regions {
+
+    publishDir file(params.results + '/support-files/graphs/regions'), mode: "copy"
+
+    input:
+        tuple val(strain), file(candidates)
+        file chromosomes_dir
+        val mask_pattern
+
+    output:
+        tuple val(strain), file("*.fa")
+    
+    script:
+        mask = mask_pattern.replace("{strain}", strain)
+
+    shell:
+    '''
+    cut -f1,20,21,22 !{candidates} | awk  'BEGIN {OFS="\t"} {if($1 ~ /^[0-9]*$/) print "!{mask}"$1,$2,$3,$4}' > candidates.bed
+    bedtools getfasta -fi !{chromosomes_dir}/!{strain}.fasta -bed candidates.bed -fo !{strain}.str.segments.fa
+    sed -i "s/!{mask}//g" !{strain}.str.segments.fa
+
+    cut -f1,16,17,20,21 !{candidates} | awk  'BEGIN {OFS="\t"} {if($1 ~ /^[0-9]*$/) print ">"$1":"$2"-"$3,">"$1":"$4"-"$5}' > index.txt
+
+    for line in index.txt
+    do
+        pos_ref="$(echo $line | cut -f1)"
+        pos_str="$(echo $line | cut -f2)"
+        sed -i "s/"$pos_str"/"$pos_ref"/g" !{strain}.str.segments.fa
+    done
+    '''
+
+}
+
+
 workflow {
+
+    reference = file(params.reference)
+    chromosomes_dir = file(params.chromosomes_dir)
+
     bubbles = Channel.fromPath(params.bubble_beds).map{ it->
         def strain = it.name.tokenize(".").get(0)
         return tuple(strain, it)
     }
-    candidate_indels(bubbles).view()
+
+    cadidates = candidate_indels(bubbles)
+    regions_strain = strain_regions(cadidates, chromosomes_dir,'{strain}#1#chr')
+    
+    regions_strain.view()
 }
