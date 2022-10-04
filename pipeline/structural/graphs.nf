@@ -57,7 +57,26 @@ process candidate_indels {
 
     shell:
     '''
-    cat !{bubbles_bed} |  awk -F"[\t:#]" 'BEGIN {OFS = "\t"; print "#ref_chr","ref_pos","ref_end","len1","|","strain_chr","strain_pos","strain_end","len2","|","short","long","a","b","|","ref_npos","ref_nend","ref_nlen","|","strain_npos","strain_nend","strain_nlen","|","info"} {seg=5; href=1; hi=$3-$2; lo=$13-$12; if(hi<lo){href=0; lo=$3-$2; hi=$13-$12;}; a1=hi%seg; a=(hi-a1)/seg; b1=((seg+2)*a-lo)%2; b=((seg+2)*a-lo-b1)/2; if(href){ref_x=$2-a; ref_y=$3+a; str_x=$12-b; str_y=$13+b;}else{ref_x=$2-b; ref_y=$3+b; str_x=$12-a; str_y=$13+a;}; if($6!="." && $3-$2!=$7) print $1,$2,$3,$3-$2,"|",$11,$12,$13,$7,"|",lo,hi,a,b,"|",ref_x,ref_y,ref_y-ref_x,"|",str_x,str_y,str_y-str_x,"|",($13-$12)-($3-$2)":"$7-($3-$2)":"$6'} > !{strain}-candidates.tsv
+    cat !{bubbles_bed} |  awk -F"[\t:#]" 'BEGIN {OFS = "\t"; print "#ref_chr","ref_pos","ref_end","len1","|","strain_chr","strain_pos","strain_end","len2","|","short","long","a","b","|","ref_npos","ref_nend","ref_nlen","|","strain_npos","strain_nend","strain_nlen","|","info"} 
+        {
+            seg=5; href=1; hi=$3-$2; lo=$13-$12; 
+            if(hi<lo){
+                href=0; lo=$3-$2; hi=$13-$12;
+            }; 
+
+            a1=hi%seg; a=(hi-a1)/seg; 
+            b1=((seg+2)*a-lo)%2; b=((seg+2)*a-lo-b1)/2; 
+
+            if(href){
+                ref_x=$2-a; ref_y=$3+a; 
+                str_x=$12-b; str_y=$13+b;
+            }else{
+                ref_x=$2-b; ref_y=$3+b; 
+                str_x=$12-a; str_y=$13+a;
+            }; 
+            if($3-$2!=$7 && $1 ~ /^[0-9]*$/) 
+                print $1,$2,$3,$3-$2,"|",$11,$12,$13,$7,"|",lo,hi,a,b,"|",ref_x,ref_y,ref_y-ref_x,"|",str_x,str_y,str_y-str_x,"|",($13-$12)-($3-$2)":"$7-($3-$2)":"$6
+        }' > candidates.tsv    
     '''   
 }
 
