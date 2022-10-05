@@ -116,11 +116,11 @@ process strain_regions {
 
     shell:
     '''
-    cut -f1,20,21,22 !{candidates} | awk  'BEGIN {OFS="\t"} {if($1 ~ /^[0-9]*$/) print "!{mask}"$1,$2,$3,$4}' > candidates.bed
+    cut -f1,20,21,22 !{candidates} | awk  'BEGIN {OFS="\t"} {pos=$2; if(pos<0){pos=0}; if($1 ~ /^[0-9]*$/) print "!{mask}"$1,pos,$3,$4}' > candidates.bed
     bedtools getfasta -fi !{chromosomes_dir}/!{strain}.fasta -bed candidates.bed -fo !{strain}.str.segments.fa
     sed -i "s/!{mask}//g" !{strain}.str.segments.fa
 
-    cut -f1,16,17,20,21 !{candidates} | awk  'BEGIN {OFS="\t"} {if($1 ~ /^[0-9]*$/) print ">"$1":"$2"-"$3,">"$1":"$4"-"$5}' > index.txt
+    cut -f1,16,17,20,21 !{candidates} | awk  'BEGIN {OFS="\t"} {pos=$4; if(pos<0){pos=0}; if($1 ~ /^[0-9]*$/) print ">"$1":"$2"-"$3,">"$1":"pos"-"$5}' > index.txt
 
     for line in index.txt
     do
