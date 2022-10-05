@@ -47,7 +47,7 @@ process get_bubbles {
 
 process candidate_indels {
 
-    publishDir file(params.results + '/support-files/graphs/candidate-regions'), mode: "copy"
+    publishDir file(params.results + '/support-files/candidate-regions'), mode: "copy"
 
     input:
         tuple val(strain), file(bubbles_bed)
@@ -82,7 +82,7 @@ process candidate_indels {
 
 process reference_regions {
 
-    publishDir file(params.results + '/support-files/graphs/regions'), mode: "copy"
+    publishDir file(params.results + '/support-files/reference-regions'), mode: "copy"
 
     input:
         tuple val(strain), file(candidates)
@@ -101,7 +101,7 @@ process reference_regions {
 
 process strain_regions {
 
-    publishDir file(params.results + '/support-files/graphs/regions'), mode: "copy"
+    publishDir file(params.results + '/support-files/candidate-regions'), mode: "copy"
 
     input:
         tuple val(strain), file(candidates)
@@ -132,6 +132,46 @@ process strain_regions {
 
 }
 
+process align_segments {
+
+    memory '8 GB'
+    maxForks 1
+    publishDir file(params.results + '/support-files/aligned-regions'), mode: "copy"
+
+    input:
+        tuple val(strain), file(segments)
+        file reference
+
+    output:
+        tuple val(strain), file("*.bam")
+
+    shell:
+    '''
+    mkdir tmp
+    minimap2 -a -R '@RG\\tID:!{strain}\\tSM:!{strain}' --MD -Y -t !{task.cpus} !{reference} !{segments} | samtools view -bS - | samtools sort -T ./tmp -o !{strain}.segments.sorted.bam -
+    '''
+}
+
+process asm_call {
+
+    publishDir file(params.results + '/support-files/variant-calls'), mode: "copy"
+
+    input:
+        tuple val(strain), file(aligned_regions)
+        file reference
+
+    output:
+        tuple val(strain), file("*.{vcf,png}")
+
+    shell:
+    '''
+    samtools index -@ !{task.cpus} !{aligned_regions}
+    svim-asm haploid ./ !{aligned_regions} !{reference}
+    mv variants.vcf !{strain}-gasm.vcf
+    mv sv-lengths.png !{strain}-gasm.lengths.png
+    '''
+}
+
 
 workflow {
 
@@ -145,6 +185,7 @@ workflow {
 
     cadidates = candidate_indels(bubbles)
     regions_strain = strain_regions(cadidates, chromosomes_dir,'{strain}#1#chr')
-    
-    regions_strain.view()
+    aligned = align_segments(regions_strain, reference)
+
+    asm_call(aligned, reference).view()
 }
