@@ -74,7 +74,7 @@ process candidate_indels {
                 ref_x=$2-b; ref_y=$3+b; 
                 str_x=$12-a; str_y=$13+a;
             }; 
-            if($6!="." && $3-$2!=$7 && $1 ~ /^[0-9]*$/ && $1==19) 
+            if($6!="." && $3-$2!=$7 && $1 ~ /^[0-9]*$/) 
                 print $1,$2,$3,$3-$2,"|",$11,$12,$13,$7,"|",lo,hi,a,b,"|",ref_x,ref_y,ref_y-ref_x,"|",str_x,str_y,str_y-str_x,"|",($13-$12)-($3-$2)":"$7-($3-$2)":"$6
         }' > candidates-!{strain}.tsv    
     '''   
