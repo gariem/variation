@@ -190,8 +190,8 @@ process bed_files {
     strain = simple_name.tokenize('-').get(0)
 
     """
-    bcftools query -i"SVTYPE='${type}'" -f'%CHROM\\t%POS0\\t%END0\\t%SVLEN\\n' ${vcf_file} | \
-            awk -F'\\t' 'BEGIN {OFS = FS} {print \$1,\$2,\$3,\$4}' > "${strain}-gasm.${type}.bed"
+    bcftools query -i"SVTYPE='!{type}'" -f'%CHROM\\t%POS0\\t%END0\\t%SVLEN\\n' !{vcf_file} | \
+            awk -F'\\t' 'BEGIN {OFS = FS} {print \$1,\$2,\$3,\$4}' > "!{strain}-gasm.!{type}.bed"
     """
 }
 
@@ -213,6 +213,6 @@ workflow {
     vcf_files = asm_call(aligned, reference)
     sv_types = Channel.from(['INS', 'DEL', 'INV', 'DUP'])
 
-    bed_files(vcf, sv_types)
+    bed_files(vcf_files, sv_types)
     
 }
