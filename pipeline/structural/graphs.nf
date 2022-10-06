@@ -161,7 +161,7 @@ process asm_call {
         file reference
 
     output:
-        tuple val(strain), file("*.{vcf,png}")
+        tuple val(strain), file("*.vcf")
 
     shell:
     '''
@@ -170,6 +170,29 @@ process asm_call {
     mv variants.vcf !{strain}-gasm.vcf
     mv sv-lengths.png !{strain}-gasm.lengths.png
     '''
+
+}
+
+process bed_files {
+
+    publishDir file(params.results + '/calls/'), mode: "copy"
+
+    input: 
+        tuple val(strain), file(vcf_file)
+        each type
+    
+    output:
+        tuple val(strain), val(type), file('*.bed')
+
+    script:
+
+    simple_name = vcf_file.name.replace(".vcf","")
+    strain = simple_name.tokenize('-').get(0)
+
+    """
+    bcftools query -i"SVTYPE='${type}'" -f'%CHROM\\t%POS0\\t%END0\\t%SVLEN\\n' ${vcf_file} | \
+            awk -F'\\t' 'BEGIN {OFS = FS} {print \$1,\$2,\$3,\$4}' > "${strain}-gasm.${type}.bed"
+    """
 }
 
 
@@ -187,5 +210,9 @@ workflow {
     regions_strain = strain_regions(cadidates, chromosomes_dir,'{strain}#1#chr')
     aligned = align_segments(regions_strain, reference)
 
-    asm_call(aligned, reference).view()
+    vcf_files = asm_call(aligned, reference)
+    sv_types = Channel.from(['INS', 'DEL', 'INV', 'DUP'])
+
+    bed_files(vcf, sv_types)
+    
 }
