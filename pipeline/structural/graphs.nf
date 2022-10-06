@@ -188,11 +188,12 @@ process bed_files {
 
     simple_name = vcf_file.name.replace(".vcf","")
     strain = simple_name.tokenize('-').get(0)
-
-    """
+    
+    shell:
+    '''
     bcftools query -i"SVTYPE='!{type}'" -f'%CHROM\\t%POS0\\t%END0\\t%SVLEN\\n' !{vcf_file} | \
             awk -F'\\t' 'BEGIN {OFS = FS} {print \$1,\$2,\$3,\$4}' > "!{strain}-gasm.!{type}.bed"
-    """
+    '''
 }
 
 
