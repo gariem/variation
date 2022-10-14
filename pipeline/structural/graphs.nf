@@ -75,7 +75,7 @@ process candidate_indels {
                 ref_x=$2-b; ref_y=$3+b; 
                 str_x=$12-a; str_y=$13+a;
             }; 
-            if($6!="." && $3-$2!=$7 && $1 ~ /^[0-9]*$/ && $1=="10") 
+            if($6!="." && $3-$2!=$7 && $1 ~ /^[0-9]*$/ && $1=="10" ) 
                 print $1,$2,$3,$3-$2,"|",$11,$12,$13,$7,"|",lo,hi,a,b,"|",ref_x,ref_y,ref_y-ref_x,"|",str_x,str_y,str_y-str_x,"|",($13-$12)-($3-$2)":"$7-($3-$2)":"$6
         }' > candidates-!{strain}.tsv    
     '''   
@@ -123,12 +123,12 @@ process strain_regions {
 
     cut -f1,16,17,20,21 !{candidates} | awk  'BEGIN {OFS="\t"} {pos=$4; if(pos<0){pos=0}; if($1 ~ /^[0-9]*$/) print ">"$1":"$2"-"$3,">"$1":"pos"-"$5}' > index.txt
 
-    for line in index.txt
+    while read -r line
     do
-        pos_ref="$(echo $line | cut -f1)"
-        pos_str="$(echo $line | cut -f2)"
+        pos_ref="$(echo "$line" | cut -f1)"
+        pos_str="$(echo "$line" | cut -f2)"
         sed -i "s/"$pos_str"/"$pos_ref"/g" !{strain}.str.segments.fa
-    done
+    done < index.txt
     '''
 
 }
@@ -209,13 +209,11 @@ workflow {
     }
 
     candidates = candidate_indels(bubbles)
-    candidates.view()
-    // regions_strain = strain_regions(cadidates, chromosomes_dir,'{strain}#1#chr')
-    // aligned = align_segments(regions_strain, reference)
+    regions_strain = strain_regions(candidates, chromosomes_dir,'{strain}#1#chr')
+    aligned = align_segments(regions_strain, reference)
 
-    // vcf_files = asm_call(aligned, reference)
-    // sv_types = Channel.from(['INS', 'DEL', 'INV', 'DUP'])
-
-    // bed_files(vcf_files, sv_types)
+    vcf_files = asm_call(aligned, reference)
+    sv_types = Channel.from(['INS', 'DEL', 'INV', 'DUP'])
+    bed_files(vcf_files, sv_types)
     
 }
