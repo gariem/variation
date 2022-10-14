@@ -4,7 +4,8 @@ nextflow.enable.dsl = 2
 
 params.reference = "./input/Mus_musculus.GRCm39.dna.toplevel.fa"
 params.results = "./results"
-params.bubble_beds = "./input/bubble_bed/*.bed"
+params.bubble_beds = "./input/minigraph/*.bed"
+params.graph = "./input/minigraph/mouse_genomes_graph.gfa"
 params.chromosomes_dir = "./input/chromosomes"
 
 process build_pangenome {
@@ -74,7 +75,7 @@ process candidate_indels {
                 ref_x=$2-b; ref_y=$3+b; 
                 str_x=$12-a; str_y=$13+a;
             }; 
-            if($6!="." && $3-$2!=$7 && $1 ~ /^[0-9]*$/) 
+            if($6!="." && $3-$2!=$7 && $1 ~ /^[0-9]*$/ && $1=="10") 
                 print $1,$2,$3,$3-$2,"|",$11,$12,$13,$7,"|",lo,hi,a,b,"|",ref_x,ref_y,ref_y-ref_x,"|",str_x,str_y,str_y-str_x,"|",($13-$12)-($3-$2)":"$7-($3-$2)":"$6
         }' > candidates-!{strain}.tsv    
     '''   
@@ -207,13 +208,14 @@ workflow {
         return tuple(strain, it)
     }
 
-    cadidates = candidate_indels(bubbles)
-    regions_strain = strain_regions(cadidates, chromosomes_dir,'{strain}#1#chr')
-    aligned = align_segments(regions_strain, reference)
+    candidates = candidate_indels(bubbles)
+    candidates.view()
+    // regions_strain = strain_regions(cadidates, chromosomes_dir,'{strain}#1#chr')
+    // aligned = align_segments(regions_strain, reference)
 
-    vcf_files = asm_call(aligned, reference)
-    sv_types = Channel.from(['INS', 'DEL', 'INV', 'DUP'])
+    // vcf_files = asm_call(aligned, reference)
+    // sv_types = Channel.from(['INS', 'DEL', 'INV', 'DUP'])
 
-    bed_files(vcf_files, sv_types)
+    // bed_files(vcf_files, sv_types)
     
 }
