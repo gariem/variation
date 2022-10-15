@@ -7,6 +7,7 @@ params.results = "./results"
 params.bubble_beds = "./input/minigraph/*.bed"
 params.graph = "./input/minigraph/mouse_genomes_graph.gfa"
 params.chromosomes_dir = "./input/chromosomes"
+params.max_mem = "12GB"
 
 process build_pangenome {
 
@@ -75,7 +76,7 @@ process candidate_indels {
                 ref_x=$2-b; ref_y=$3+b; 
                 str_x=$12-a; str_y=$13+a;
             }; 
-            if($6!="." && $3-$2!=$7 && $1 ~ /^[0-9]*$/  ) 
+            if($6!="." && $3-$2!=$7 && $1 ~ /^[0-9]*$/ && $1=="10") 
                 print $1,$2,$3,$3-$2,"|",$11,$12,$13,$7,"|",lo,hi,a,b,"|",ref_x,ref_y,ref_y-ref_x,"|",str_x,str_y,str_y-str_x,"|",($13-$12)-($3-$2)":"$7-($3-$2)":"$6
         }' > candidates-!{strain}.tsv    
     '''   
@@ -121,21 +122,29 @@ process strain_regions {
     bedtools getfasta -fi !{chromosomes_dir}/!{strain}.fasta -bed candidates.bed -fo !{strain}.str.segments.fa
     sed -i "s/!{mask}//g" !{strain}.str.segments.fa
 
-    cut -f1,16,17,20,21 !{candidates} | awk  'BEGIN {OFS="\t"} {pos=$4; if(pos<0){pos=0}; if($1 ~ /^[0-9]*$/) print ">"$1":"$2"-"$3,">"$1":"pos"-"$5}' > index.txt
+    cut -f1,16,17,20,21 !{candidates} | awk  'BEGIN {OFS="\t"} {pos=$4; if(pos<0){pos=0}; if($1 ~ /^[0-9]*$/) print "s/>"$1":"pos"-"$5"/>"$1":"$2"-"$3"/"}' > search.txt
 
-    while read -r line
+    n1=0
+    exps=""
+    while read -r search_pattern
     do
-        pos_ref="$(echo "$line" | cut -f1)"
-        pos_str="$(echo "$line" | cut -f2)"
-        sed -i "s/"$pos_str"/"$pos_ref"/g" !{strain}.str.segments.fa
-    done < index.txt
+        n1=$((n1+1))
+        n2=$((n1*2-1))
+        exps="$exps -e ${n2}${search_pattern}"
+        ctl=$((n1%100))
+        if [[ $ctl -eq 0 ]]; then
+            sed -i $exps !{strain}.str.segments.fa
+            exps=""
+        fi
+    done < search.txt
+    sed -i $exps !{strain}.str.segments.fa
     '''
 
 }
 
 process align_segments {
 
-    memory '8 GB'
+    memory params.max_mem
     maxForks 1
     publishDir file(params.results + '/support-files/aligned-regions'), mode: "copy"
 
