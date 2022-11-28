@@ -11,3 +11,4 @@ input/validation
 input/bubble_bed
 *.gff3
 *.out
+__pycache__
