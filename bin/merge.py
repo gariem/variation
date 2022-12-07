@@ -1,30 +1,50 @@
 import argparse
 import logging
 import sys
+import tempfile
 from pathlib import Path
+
+from pybedtools import BedTool
 
 logger = logging.getLogger()
 
 
+class Coordinate:
+    def __init__(self, chrom, pos, end):
+        self._chrom = chrom
+        self._pos = pos
+        self._end = end
+
+    @property
+    def chrom(self):
+        return self._chrom
+
+    @property
+    def pos(self):
+        return self._pos
+
+    @property
+    def end(self):
+        return self._end
+
+
 class Variant:
-    def __init__(self, chrom, pos, identifier, ref, alt, quality, info, format_value, sample, sv_type='', caller='',
-                 precise=True):
+    def __init__(self, chrom, pos, identifier, ref, alt, quality, filter, info, format_value, sample,
+                 source=''):
         self._chrom = chrom
         self._pos = pos
         self._id = identifier
         self._ref = ref
         self._alt = alt
         self._quality = quality
+        self._filter = filter
         self._info = info
         self._format = format_value
         self._sample = sample
-        self._caller = caller
-        self._precise = precise
+        self._source = source
 
-        self._type, self._len, self._end = self._get_precise_type_len_end() if self._precise \
-            else self._get_info_type_len_end()
-
-        self._sequence = self._get_target_sequence()
+        self._set_type_len_end()
+        self._set_confidence_and_sequence()
 
     def __eq__(self, other):
         """Overrides the default implementation"""
@@ -32,54 +52,222 @@ class Variant:
             return self._chrom == other._chrom and self._pos == other._pos
         return False
 
-    def _get_precise_type_len_end(self):
-        sv_len = 0
-        end = 0
+    def _set_type_len_end(self):
 
-        if self._ref and self._alt and self._pos:
-            sv_len = len(self._alt) - len(self._ref)
-            sv_type = 'INS' if sv_len > 0 else ('DEL' if sv_len < 0 else '')
-            end = self._pos + abs(sv_len)
+        self._type = None
+        self._len = 0
+        self._end = None
 
-        return sv_type, sv_len, end
-
-    def _get_info_type_len_end(self):
-        sv_type = ''
-        sv_len = 0
-        end = 0
-
+        sv_len = len(self._alt) - len(self._ref)
         info_list = self._info.split(';')
 
         for info in info_list:
             if 'SVTYPE=' in info:
-                sv_type = info.replace('SVTYPE=', '')
+                self._type = info.replace('SVTYPE=', '')
+                continue
+
             if 'SVLEN=' in info:
-                sv_len = int(info.replace('SVLEN=', ''))
+                self._len = int(info.replace('SVLEN=', ''))
                 continue
+
             if 'END=' in info:
-                end = int(info.replace('END=', ''))
+                self._end = int(info.replace('END=', ''))
                 continue
 
-        return sv_type, sv_len, end
+        self._calculated_type = 'INS' if sv_len > 0 else ('DEL' if sv_len < 0 else '')
+        self._calculated_len = len(self._alt) - len(self._ref)
+        self._calculated_end = self._pos + abs(sv_len)
 
-    def _get_target_sequence(self):
-        return self._ref if self._type == 'DEL' else self._alt
+    def _set_confidence_and_sequence(self):
+        if self._type == self._calculated_type and self._end == self._calculated_end and self._len == self._calculated_len:
+            self._confidence = 1
+
+        self._sequence = self._alt if self._type == 'INS' or self._calculated_type == 'INS' else (
+            self._ref if self._type == 'DEL' or self._calculated_type == 'DEL' else '')
+
+    @property
+    def chrom(self):
+        return self._chrom
+
+    @property
+    def pos(self):
+        return self._pos
+
+    @property
+    def end(self):
+        return_value = self._end if self._end else self._calculated_end
+        if self._type == 'DEL' or self._calculated_type == 'DEL':
+            return_value = self._calculated_end
+        elif self._type == 'INS' or self._calculated_type == 'INS':
+            return_value = self._pos + 1 if not self._end else self._end
+
+        return return_value
+
+    @property
+    def sv_type(self):
+        return self._type if self._type else self._calculated_type
+
+    def __str__(self):
+        return f"{self.chrom}:{self.pos}-{self.end}"
+
+
+def load_variants(vcf_file_path):
+    variants = dict()
+    with open(vcf_file_path, 'r') as vcf_file:
+        for line in vcf_file:
+            if not line.startswith("#"):
+                values = line.strip().split('\t')
+                if len(values) != 10:
+                    continue
+                # TODO: Remove later
+                if not values[0] == "19":
+                    continue
+                variant = Variant(values[0], int(values[1]), values[2], values[3], values[4], values[5], values[6],
+                                  values[7], values[8], values[9], source=vcf_file_path)
+                if variant is None:
+                    print(variant)
+
+                lst = variants.get(variant.chrom, dict())
+                idx = hash(line)
+                lst[idx] = variant
+                variants[variant.chrom] = lst
+
+    return variants
+
+
+def write_variants(merged_variants):
+    for variant in merged_variants:
+        print(
+            f'{variant.chrom}\t{variant.pos}\t.\t{variant._ref}\t{variant._alt}\t.\tPASS\t{variant._info}\t{variant._format}\t{variant._sample}')
+
+
+class Intersection:
+    def __init__(self, line):
+        values = line.split('\t')
+
+        self._a = Coordinate(values[0], values[1], values[2])
+        self._b = Coordinate(values[4], values[5], values[6])
+
+        self._a_hash = int(values[3])
+        self._b_hash = int(values[7])
+
+    @property
+    def a(self):
+        return self._a
+
+    @property
+    def b(self):
+        return self._b
+
+    @property
+    def chrom(self):
+        return self._a.chrom
+
+    @property
+    def pos(self):
+        return self.a.pos if self.a.pos < self.b.pos else self.b.pos
+
+    @property
+    def end(self):
+        return self.a.end if self.a.end > self.b.end else self.b.end
+
+    @property
+    def hash1(self):
+        return self._a_hash
+
+    @property
+    def hash2(self):
+        return self._b_hash
+
+    def __str__(self):
+        return f"{self.a.chrom}:{self.a.pos}-{self.a.end} <-> {self.b.chrom}:{self.b.pos}-{self.b.end} => {self.chrom}:{self.pos}-{self.end}"
+
+
+def merge_variants(variants_a, variants_b, window=0):
+    merged_variants = []
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix='.bed') as temp_file_a, \
+            tempfile.NamedTemporaryFile(mode="w", delete=False, suffix='.bed') as temp_file_b:
+
+        # print(f"Writing temporary file a: {temp_file_a.name}")
+        for idx in variants_a:
+            variant = variants_a[idx]
+            temp_file_a.write(f"{variant.chrom}\t{int(variant.pos) - window}\t{int(variant.end) + window}\t{idx}\n")
+
+        # print(f"Writing temporary file b: {temp_file_b.name}")
+        for idx in variants_b:
+            variant = variants_b[idx]
+            temp_file_b.write(f"{variant.chrom}\t{int(variant.pos) - window}\t{int(variant.end) + window}\t{idx}\n")
+
+    bed_a = BedTool(temp_file_a.name)
+    bed_b = BedTool(temp_file_b.name)
+
+    remove_from_b = []
+
+    for line in bed_a.intersect(bed_b, f=0.8, r=True, wo=True):
+        intersection = Intersection(str(line))
+        variant_a = variants_a.get(intersection.hash1)
+        variant_b = variants_b.get(intersection.hash2)
+
+        if variant_a is None or variant_b is None:
+            print(variant_a)
+            print(variant_b)
+
+        if variant_a.sv_type == variant_b.sv_type:
+            if variant_a.sv_type in ['INS', 'INDEL']:
+                if len(variant_a._sequence) > len(variant_b._sequence):
+                    percent = len(variant_b._sequence) / len(variant_a._sequence)
+                else:
+                    percent = len(variant_a._sequence) / len(variant_b._sequence)
+
+                if percent < 0.8:
+                    continue
+
+            variant_a._info = variant_a._info + f';GASM={variant_a};PILEUP={variant_b}'
+            variant_a._pos = variant_a.pos if variant_a.pos < variant_b.pos else variant_b.pos
+            variant_a._end = variant_a.end if variant_a.end > variant_b.end else variant_b.end
+
+            remove_from_b.append(intersection.hash2)
+            # del variants_b[]
+
+    for entry in list(set(remove_from_b)):
+        del variants_b[entry]
+
+    for idx in variants_a:
+        variant = variants_a[idx]
+        merged_variants.append(variant)
+
+    for idx in variants_b:
+        variant = variants_b[idx]
+        merged_variants.append(variant)
+
+    return merged_variants
 
 
 class Merger:
-    def __init__(self, gasm_file, mpileup_file):
+
+    def __init__(self, gasm_file, pileup_file):
         self._gasm_file = gasm_file
-        self._mpileup_file = mpileup_file
+        self._pileup_file = pileup_file
+
+        self._gasm_variants = []
+        self._pileup_variants = []
 
     def merge(self):
-        print("Hello world!!")
+        merged_variants = []
+        self._gasm_variants = load_variants(self._gasm_file)
+        self._pileup_variants = load_variants(self._pileup_file)
+
+        for chrom in self._gasm_variants.keys():
+            merged_variants.extend(merge_variants(self._gasm_variants.get(chrom), self._pileup_variants.get(chrom), 5))
+
+        write_variants(merged_variants)
 
 
 def parse_args(argv=None):
     """Define and immediately parse command line arguments."""
     parser = argparse.ArgumentParser(
         description="Merge variants from mpileup and minigraph + svim-asm",
-        epilog="Example: python merge.py --gasm_file=svim.vcf --pileup_file=pileup.vcf",
+        epilog="Example: python merge.py --gasm_file=svim.vcf --pileup_file=pileup_del.vcf",
     )
     parser.add_argument(
         "--gasm_file",
