@@ -59,6 +59,17 @@ class Variant:
         self._end = None
 
         sv_len = len(self._alt) - len(self._ref)
+
+        if self._info == 'INDEL':
+            self._type = 'INDEL'
+
+        if len(self._alt) == 1 and len(self._ref) == 1:
+            self._type = 'SNP'
+            self._calculated_type = 'SNP'
+            self._end = self._pos
+
+            self._info += f';CTYPE=SNP'
+
         info_list = self._info.split(';')
 
         for info in info_list:
@@ -74,16 +85,20 @@ class Variant:
                 self._end = int(info.replace('END=', ''))
                 continue
 
-        self._calculated_type = 'INS' if sv_len > 0 else ('DEL' if sv_len < 0 else '')
-        self._calculated_len = len(self._alt) - len(self._ref)
-        self._calculated_end = self._pos + abs(sv_len)
+        if self.indel:
+            self._calculated_type = 'INS' if sv_len > 0 else ('DEL' if sv_len < 0 else '')
+            self._calculated_len = len(self._alt) - len(self._ref)
+            self._calculated_end = self._pos + abs(sv_len)
+
+            self._info += f';CTYPE={self._calculated_type};CLEN={self._calculated_len};CEND={self._calculated_end}'
 
     def _set_confidence_and_sequence(self):
-        if self._type == self._calculated_type and self._end == self._calculated_end and self._len == self._calculated_len:
-            self._confidence = 1
+        if self.indel:
+            if self._type == self._calculated_type and self._end == self._calculated_end and self._len == self._calculated_len:
+                self._confidence = 1
 
-        self._sequence = self._alt if self._type == 'INS' or self._calculated_type == 'INS' else (
-            self._ref if self._type == 'DEL' or self._calculated_type == 'DEL' else '')
+            self._sequence = self._alt if self._type == 'INS' or self._calculated_type == 'INS' else (
+                self._ref if self._type == 'DEL' or self._calculated_type == 'DEL' else '')
 
     @property
     def chrom(self):
@@ -95,11 +110,23 @@ class Variant:
 
     @property
     def end(self):
-        return_value = self._end if self._end else self._calculated_end
-        if self._type == 'DEL' or self._calculated_type == 'DEL':
-            return_value = self._calculated_end
-        elif self._type == 'INS' or self._calculated_type == 'INS':
-            return_value = self._pos + 1 if not self._end else self._end
+        if not self.indel:
+            if self._end:
+                return_value = self._end
+            else:
+                if hasattr(self, '_calculated_end'):
+                    return_value = self._pos + self._calculated_end
+                else:
+                    if hasattr(self, '_calculated_len'):
+                        return_value = self._pos + self._calculated_len
+                    else:
+                        return_value = self._pos + 1
+        else:
+            return_value = self._end if self._end else self._calculated_end
+            if self._type == 'DEL' or self._calculated_type == 'DEL':
+                return_value = self._calculated_end
+            elif self._type == 'INS' or self._calculated_type == 'INS':
+                return_value = self._pos + 1 if not self._end else self._end
 
         return return_value
 
@@ -110,6 +137,10 @@ class Variant:
     def __str__(self):
         return f"{self.chrom}:{self.pos}-{self.end}"
 
+    @property
+    def indel(self):
+        return (not self._type.split(':')[0].replace('<', '') in ["BND", "DUP", "INV"]) and (not "SNP" in self._info)
+
 
 def load_variants(vcf_file_path):
     variants = dict()
@@ -119,9 +150,12 @@ def load_variants(vcf_file_path):
                 values = line.strip().split('\t')
                 if len(values) != 10:
                     continue
+
                 # TODO: Remove later
-                if not values[0] == "19":
+                if values[0] not in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
+                                     "16", "17", "18", "19", "X"]:
                     continue
+
                 variant = Variant(values[0], int(values[1]), values[2], values[3], values[4], values[5], values[6],
                                   values[7], values[8], values[9], source=vcf_file_path)
                 if variant is None:
@@ -135,10 +169,11 @@ def load_variants(vcf_file_path):
     return variants
 
 
-def write_variants(merged_variants):
-    for variant in merged_variants:
-        print(
-            f'{variant.chrom}\t{variant.pos}\t.\t{variant._ref}\t{variant._alt}\t.\tPASS\t{variant._info}\t{variant._format}\t{variant._sample}')
+def write_variants(merged_variants, output_path):
+    with open(output_path, "w") as output_file:
+        for variant in merged_variants:
+            output_file.write(
+                f'{variant.chrom}\t{variant.pos}\t.\t{variant._ref}\t{variant._alt}\t.\tPASS\t{variant._info}\t{variant._format}\t{variant._sample}\n')
 
 
 class Intersection:
@@ -208,10 +243,6 @@ def merge_variants(variants_a, variants_b, window=0):
         variant_a = variants_a.get(intersection.hash1)
         variant_b = variants_b.get(intersection.hash2)
 
-        if variant_a is None or variant_b is None:
-            print(variant_a)
-            print(variant_b)
-
         if variant_a.sv_type == variant_b.sv_type:
             if variant_a.sv_type in ['INS', 'INDEL']:
                 if len(variant_a._sequence) > len(variant_b._sequence):
@@ -222,12 +253,11 @@ def merge_variants(variants_a, variants_b, window=0):
                 if percent < 0.8:
                     continue
 
-            variant_a._info = variant_a._info + f';GASM={variant_a};PILEUP={variant_b}'
+            variant_a._info += f';GASM={variant_a};PILEUP={variant_b}'
             variant_a._pos = variant_a.pos if variant_a.pos < variant_b.pos else variant_b.pos
             variant_a._end = variant_a.end if variant_a.end > variant_b.end else variant_b.end
 
             remove_from_b.append(intersection.hash2)
-            # del variants_b[]
 
     for entry in list(set(remove_from_b)):
         del variants_b[entry]
@@ -245,22 +275,27 @@ def merge_variants(variants_a, variants_b, window=0):
 
 class Merger:
 
-    def __init__(self, gasm_file, pileup_file):
+    def __init__(self, gasm_file, pileup_file, output_file):
         self._gasm_file = gasm_file
         self._pileup_file = pileup_file
+        self._out_file = output_file
 
         self._gasm_variants = []
         self._pileup_variants = []
 
     def merge(self):
         merged_variants = []
+        logger.info(f"Loading entries from file {self._gasm_file}")
         self._gasm_variants = load_variants(self._gasm_file)
+        logger.info(f"Loading entries from file {self._pileup_file}")
         self._pileup_variants = load_variants(self._pileup_file)
 
         for chrom in self._gasm_variants.keys():
+            logger.info(f"Merging chromosome {chrom}")
             merged_variants.extend(merge_variants(self._gasm_variants.get(chrom), self._pileup_variants.get(chrom), 5))
 
-        write_variants(merged_variants)
+        logger.info(f"Writing result to {self._out_file}")
+        write_variants(merged_variants, self._out_file)
 
 
 def parse_args(argv=None):
@@ -278,6 +313,11 @@ def parse_args(argv=None):
         "--pileup_file",
         type=Path,
         help="Input VCF (pileup)",
+    )
+    parser.add_argument(
+        "--out",
+        type=Path,
+        help="Output VCF",
     )
     parser.add_argument(
         "-l",
@@ -301,7 +341,7 @@ def main(argv=None):
         logger.error(f"The given input file {args.pileup_file} was not found!")
         sys.exit(2)
 
-    Merger(args.gasm_file, args.pileup_file).merge()
+    Merger(args.gasm_file, args.pileup_file, args.out).merge()
 
 
 if __name__ == "__main__":
