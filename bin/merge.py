@@ -132,7 +132,10 @@ class Variant:
 
     @property
     def sv_type(self):
-        return self._type if self._type else self._calculated_type
+        if hasattr(self, '_calculated_type'):
+            return self._calculated_type
+        else:
+            return self._type
 
     def __str__(self):
         return f"{self.chrom}:{self.pos}-{self.end}"
