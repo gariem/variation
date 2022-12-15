@@ -58,6 +58,7 @@ process INDELS {
 	output:
 		file "*.bed"
 		file "*.csv"
+		file "*.vcf"
 
 	shell:
 	'''
@@ -65,6 +66,11 @@ process INDELS {
 	bcftools query -i'CTYPE="INS"' -f'%CHROM\t%POS\t%CEND\t%CLEN\n' !{merged_vcf} > !{strain}-merged.INS.bed
 
 	bcftools query -i'CTYPE="INS" | CTYPE="DEL"' -f'%CHROM\t%POS\t%CEND\t%CLEN\n' !{merged_vcf} > !{strain}-merged.bed
+
+	bcftools view --no-version -h !{merged_vcf} > !{strain}-only_merged.vcf
+	grep GASM !{merged_vcf} >> !{strain}-only_merged.vcf
+
+	bcftools query -f'%CHROM\t%POS\t%CEND\t%CLEN\n' !{strain}-only_merged.vcf > !{strain}-only_merged.bed
 
 	DEL_0_10="$(bcftools query -i'CTYPE="DEL" & abs(CLEN)<10' -f'%CHROM\t%POS\t%CEND\t%CLEN\n' !{merged_vcf} | wc -l)"
 	DEL_10_30="$(bcftools query -i'CTYPE="DEL" & abs(CLEN)>=10 & abs(CLEN)<30' -f'%CHROM\t%POS\t%CEND\t%CLEN\n' !{merged_vcf} | wc -l)"
