@@ -140,6 +140,10 @@ class Variant:
     def __str__(self):
         return f"{self.chrom}:{self.pos}-{self.end}"
 
+    def __hash__(self):
+        variant_str_id = f"{self._chrom}:{self.pos}-{self.end}@{self._ref}>{self._alt}"
+        return hash(variant_str_id)
+
     @property
     def indel(self):
         return (not self._type.split(':')[0].replace('<', '') in ["BND", "DUP", "INV"]) and (not "SNP" in self._info)
@@ -165,7 +169,7 @@ def load_variants(vcf_file_path):
                     print(variant)
 
                 lst = variants.get(variant.chrom, dict())
-                idx = hash(line)
+                idx = hash(variant)
                 lst[idx] = variant
                 variants[variant.chrom] = lst
 
@@ -256,7 +260,7 @@ def merge_variants(variants_a, variants_b, window=0):
                 if percent < 0.8:
                     continue
 
-            variant_a._info += f';GASM={variant_a};PILEUP={variant_b}'
+            variant_a._info += f';MERGED;GASM={variant_a};MPILEUP={variant_b}'
             variant_a._pos = variant_a.pos if variant_a.pos < variant_b.pos else variant_b.pos
             variant_a._end = variant_a.end if variant_a.end > variant_b.end else variant_b.end
 
