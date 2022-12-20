@@ -69,7 +69,7 @@ process INDELS {
 	bcftools query -i'CTYPE="INS" | CTYPE="DEL"' -f'%CHROM\t%POS\t%CEND\t%CLEN\n' !{merged_vcf} > !{strain}-merged.bed
 
 	bcftools view --no-version -h !{merged_vcf} > !{strain}-only_merged.vcf
-	grep GASM !{merged_vcf} >> !{strain}-only_merged.vcf
+	grep "METHOD=MERGED" !{merged_vcf} >> !{strain}-only_merged.vcf
 
 	bcftools query -f'%CHROM\t%POS\t%CEND\t%CLEN\n' !{strain}-only_merged.vcf > !{strain}-only_merged.bed
 
