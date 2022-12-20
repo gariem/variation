@@ -30,7 +30,7 @@ class Coordinate:
 
 class Variant:
     def __init__(self, chrom, pos, identifier, ref, alt, quality, filter, info, format_value, sample,
-                 source=''):
+                 source=""):
         self._chrom = chrom
         self._pos = pos
         self._id = identifier
@@ -45,6 +45,14 @@ class Variant:
 
         self._set_type_len_end()
         self._set_confidence_and_sequence()
+
+        method = ""
+        if "gasm" in source.lower():
+            method = "GASM"
+        if "pileup" in source.lower():
+            method = "MPILEUP"
+
+        self._info += f';METHOD={method}'
 
     def __eq__(self, other):
         """Overrides the default implementation"""
@@ -164,7 +172,7 @@ def load_variants(vcf_file_path):
                     continue
 
                 variant = Variant(values[0], int(values[1]), values[2], values[3], values[4], values[5], values[6],
-                                  values[7], values[8], values[9], source=vcf_file_path)
+                                  values[7], values[8], values[9], source=str(vcf_file_path))
                 if variant is None:
                     print(variant)
 
@@ -260,7 +268,9 @@ def merge_variants(variants_a, variants_b, window=0):
                 if percent < 0.8:
                     continue
 
-            variant_a._info += f';MERGED;GASM={variant_a};MPILEUP={variant_b}'
+            variant_a._info += f';GASM={variant_a};MPILEUP={variant_b}'
+            variant_a._info = variant_a._info.replace("METHOD=GASM", "METHOD=MERGED")
+            variant_a._info = variant_a._info.replace("METHOD=MPILEUP", "METHOD=MERGED")
             variant_a._pos = variant_a.pos if variant_a.pos < variant_b.pos else variant_b.pos
             variant_a._end = variant_a.end if variant_a.end > variant_b.end else variant_b.end
 
