@@ -27,13 +27,13 @@ process MERGE {
 
 	sed -i '$ d' "!{strain}-merged.vcf"
 
-	echo "##INFO=<ID=CTYPE,Number=1,Type=String,Description=\"Calculated SVTYPE\">" >> "!{strain}-merged.vcf"
-	echo "##INFO=<ID=CLEN,Number=1,Type=Integer,Description=\"Calculated SVLEN\">" >> "!{strain}-merged.vcf"
-	echo "##INFO=<ID=CEND,Number=1,Type=Integer,Description=\"Calculated END">\" >> "!{strain}-merged.vcf"
-	echo "##INFO=<ID=INDEL,Number=0,Type=Flag,Description=\"Indicates that the variant is an INDEL.\">" >> "!{strain}-merged.vcf"
-	echo "##INFO=<ID=SRC,Number=1,Type=String,Description=\"Indicates a source of the variant (GASM, MPILEUP, MERGED).\">" >> "!{strain}-merged.vcf"
-	echo "##INFO=<ID=GASM,Number=1,Type=String,Description=\"Coordinates for GASM.\">" >> "!{strain}-merged.vcf"
-	echo "##INFO=<ID=PILEUP,Number=1,Type=String,Description=\"Coordinates for PILEUP.\">" >> "!{strain}-merged.vcf"
+	echo '##INFO=<ID=CTYPE,Number=1,Type=String,Description="Calculated SVTYPE">' >> "!{strain}-merged.vcf"
+	echo '##INFO=<ID=CLEN,Number=1,Type=Integer,Description="Calculated SVLEN">' >> "!{strain}-merged.vcf"
+	echo '##INFO=<ID=CEND,Number=1,Type=Integer,Description="Calculated END">' >> "!{strain}-merged.vcf"
+	echo '##INFO=<ID=INDEL,Number=0,Type=Flag,Description="Indicates that the variant is an INDEL.">' >> "!{strain}-merged.vcf"
+	echo '##INFO=<ID=SRC,Number=1,Type=String,Description="Indicates a source of the variant (GASM, MPILEUP, MERGED).">' >> "!{strain}-merged.vcf"
+	echo '##INFO=<ID=GASM,Number=1,Type=String,Description="Coordinates for GASM.>' >> "!{strain}-merged.vcf"
+	echo '##INFO=<ID=PILEUP,Number=1,Type=String,Description="Coordinates for PILEUP.">' >> "!{strain}-merged.vcf"
 
 	echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t!{strain}" >> "!{strain}-merged.vcf"
 
