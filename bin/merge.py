@@ -46,6 +46,9 @@ class Variant:
         self._set_type_len_end()
         self._set_confidence_and_sequence()
 
+        self._format += ':M1:M2'
+        self._sample += ':1:0' if "gasm" in self._source.lower() else ':0:1'
+
         method = ""
         if "gasm" in source.lower():
             method = "GASM"
@@ -100,6 +103,13 @@ class Variant:
 
             self._info += f';CTYPE={self._calculated_type};CLEN={self._calculated_len};CEND={self._calculated_end}'
 
+        if self.inv:
+            self._calculated_type = 'INV'
+            self._calculated_len = len(self._alt)
+            self._calculated_end = self._pos + abs(sv_len)
+
+            self._info += f';CTYPE={self._calculated_type};CLEN={self._calculated_len};CEND={self._calculated_end}'
+
     def _set_confidence_and_sequence(self):
         if self.indel:
             if self._type == self._calculated_type and self._end == self._calculated_end and self._len == self._calculated_len:
@@ -145,6 +155,10 @@ class Variant:
         else:
             return self._type
 
+    @property
+    def info(self):
+        return self._info.replace(".;", "")
+
     def __str__(self):
         return f"{self.chrom}:{self.pos}-{self.end}"
 
@@ -155,6 +169,10 @@ class Variant:
     @property
     def indel(self):
         return (not self._type.split(':')[0].replace('<', '') in ["BND", "DUP", "INV"]) and (not "SNP" in self._info)
+
+    @property
+    def inv(self):
+        return self._type and self._type.lower() == "inv"
 
 
 def load_variants(vcf_file_path):
@@ -188,7 +206,7 @@ def write_variants(merged_variants, output_path):
     with open(output_path, "w") as output_file:
         for variant in merged_variants:
             output_file.write(
-                f'{variant.chrom}\t{variant.pos}\t.\t{variant._ref}\t{variant._alt}\t.\tPASS\t{variant._info}\t{variant._format}\t{variant._sample}\n')
+                f'{variant.chrom}\t{variant.pos}\t.\t{variant._ref}\t{variant._alt}\t.\tPASS\t{variant.info}\t{variant._format}\t{variant._sample}\n')
 
 
 class Intersection:
@@ -273,7 +291,7 @@ def merge_variants(variants_a, variants_b, window=0):
             variant_a._info = variant_a._info.replace("METHOD=MPILEUP", "METHOD=MERGED")
             variant_a._pos = variant_a.pos if variant_a.pos < variant_b.pos else variant_b.pos
             variant_a._end = variant_a.end if variant_a.end > variant_b.end else variant_b.end
-
+            variant_a._sample = variant_a._sample.replace(':0', ':1')
             remove_from_b.append(intersection.hash2)
 
     for entry in list(set(remove_from_b)):

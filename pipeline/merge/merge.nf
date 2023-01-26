@@ -23,10 +23,12 @@ process MERGE {
 
     shell:
     '''
-	bcftools view -h !{gasm_vcf} > "!{strain}-merged.vcf"
+	bcftools view --no-version -h !{gasm_vcf} > "!{strain}-merged.vcf"
 
 	sed -i '$ d' "!{strain}-merged.vcf"
 
+	echo '##FORMAT=<ID=M1,Number=1,Type=String,Description="Method 1: GASM - Genome assembly and graphs">' >> "!{strain}-merged.vcf"
+	echo '##FORMAT=<ID=M2,Number=1,Type=String,Description="Method 2: MPILEUP - Genome assembly and mpileup">' >> "!{strain}-merged.vcf"
 	echo '##INFO=<ID=CTYPE,Number=1,Type=String,Description="Calculated SVTYPE">' >> "!{strain}-merged.vcf"
 	echo '##INFO=<ID=CLEN,Number=1,Type=Integer,Description="Calculated SVLEN">' >> "!{strain}-merged.vcf"
 	echo '##INFO=<ID=CEND,Number=1,Type=Integer,Description="Calculated END">' >> "!{strain}-merged.vcf"
@@ -34,7 +36,6 @@ process MERGE {
 	echo '##INFO=<ID=METHOD,Number=1,Type=String,Description="Indicates a source of the variant (GASM, MPILEUP, MERGED).">' >> "!{strain}-merged.vcf"
 	echo '##INFO=<ID=GASM,Number=1,Type=String,Description="Coordinates for GASM.">' >> "!{strain}-merged.vcf"
 	echo '##INFO=<ID=MPILEUP,Number=1,Type=String,Description="Coordinates for MPILEUP.">' >> "!{strain}-merged.vcf"
-	echo '##INFO=<ID=.,Number=0,Type=Flag,Description="Indicates that the variant had no prior information before merging.">' >> "!{strain}-merged.vcf"
 
 	echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t!{strain}" >> "!{strain}-merged.vcf"
 
@@ -44,7 +45,12 @@ process MERGE {
     python !{merge} --gasm_file=!{gasm_vcf} \
         --pileup_file=!{pileup_vcf} --out=!{strain}-merged.vcf.tmp
 
-    cat !{strain}-merged.vcf.tmp >> "!{strain}-merged.vcf"
+    cat !{strain}-merged.vcf.tmp >> "!{strain}-merged.tmp.vcf"
+
+    bcftools sort "!{strain}-merged.vcf" -o "!{strain}-merged.sorted.vcf"
+
+    rm "!{strain}-merged.tmp.vcf"
+
     '''
 
 }
