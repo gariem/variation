@@ -45,11 +45,11 @@ process MERGE {
     python !{merge} --gasm_file=!{gasm_vcf} \
         --pileup_file=!{pileup_vcf} --out=!{strain}-merged.vcf.tmp
 
-    cat !{strain}-merged.vcf.tmp >> "!{strain}-merged.tmp.vcf"
+    cat !{strain}-merged.vcf.tmp >> "!{strain}-merged.vcf"
     rm !{strain}-merged.vcf.tmp
 
-    bcftools sort "!{strain}-merged.tmp.vcf" -o "!{strain}-merged.sorted.vcf"
-    rm "!{strain}-merged.tmp.vcf"
+    bcftools sort "!{strain}-merged.vcf" -o "!{strain}-merged.sorted.vcf"
+    rm "!{strain}-merged.vcf"
 
     '''
 
